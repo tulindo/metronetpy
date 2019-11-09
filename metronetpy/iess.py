@@ -14,21 +14,27 @@ METRONET_URL = f"https://{METRONET}/"
 
 
 class Controller(object):
-    def __init__(self, config):
-        self.config = config
-        self.sensors = config.sensors.copy()
-        self.callbacks = []
+    def __init__(self, username, password):
+        self.username = username
+        self.password = password
+        self.sensors = []
         self.lookup = {}
-        self.run = True
-
-        for sensor in self.sensors:
-            self.lookup[sensor["id"]] = sensor
-
+        self.callbacks = []
+        self.run = False
         self.connection = None
         self.session_cookie = None
         self.headers = None
         self.session_id = None
         self.last_input = None
+
+    def set_sensors(self, sensors):
+        self.sensors = sensors
+        self.__create_lookup()
+
+    def __create_lookup(self):
+        self.lookup = {}
+        for sensor in self.sensors:
+            self.lookup[sensor["id"]] = sensor
 
     def notify(self, data):
         """Call callbacks with event data."""
@@ -79,14 +85,28 @@ class Controller(object):
         data = {
             "IsDisableAccountCreation": "False",
             "IsAllowThemeChange": "False",
-            "UserName": self.config.username,
-            "Password": self.config.password,
+            "UserName": self.username,
+            "Password": self.password,
             "RememberMe": "false",
         }
 
         self.connection.request("POST", "/", body=urlencode(data), headers=headers)
 
         resp = self.connection.get_response()
+
+        logged_in = False
+        if resp.status == 302:
+            found_username = False
+            found_password = False
+            for i in resp.headers.get("set-cookie"):
+                str = i.decode("UTF-8")
+                if not found_username:
+                    found_username = "username" in str
+                if not found_password:
+                    found_password = "password" in str
+            if found_username and found_password:
+                logged_in = True
+        return logged_in
 
     def get_variable(self, page, name):
         # Legge variabile da pagina html.
@@ -131,12 +151,19 @@ class Controller(object):
             if str["Class"] == 10:
                 # Found an input
                 idx = str["Index"]
-                if idx in self.lookup:
-                    # The input is in the list of configured sensors
+                if not self.lookup:
+                    # No configuration provided. Get all sensors.
+                    self.sensors.append(
+                        {"id": idx, "type": None, "name": str["Description"]}
+                    )
+                elif idx in self.lookup:
+                    # Consider only configured sensors.
                     sensor = self.lookup[idx]
                     if not sensor["name"]:
-                        # Configured without name... get it from metronet
+                        # Configured without name... get it from metronet.
                         sensor["name"] = str["Description"]
+        if not self.lookup:
+            self.__create_lookup()
 
     def get_inputs(self, notify=True, is_retry=False):
         data = {"sessionId": self.session_id}
@@ -155,7 +182,7 @@ class Controller(object):
             for obj in page:
                 idx = obj["Index"]
                 if idx in self.lookup:
-                    # The input is in the list of configured sensors
+                    # The input is in the list of configured sensors.
                     sensor = self.lookup[idx]
                     if not notify or sensor["active"] != obj["Alarm"]:
                         is_changed = True
@@ -173,7 +200,7 @@ class Controller(object):
             self.login()
             _LOGGER.info("Re Init Session Data")
             self.init_session_data()
-            # Try again
+            # Try again.
             self.get_inputs(True)
 
     def get_updates(self):
@@ -204,7 +231,10 @@ class Controller(object):
             return changes
         else:
             _LOGGER.info("Updates Relogin")
-            self.login()
+            logged_in = self.login()
+            if not logged_in:
+                _LOGGER.error("Failed to login")
+                return False
             _LOGGER.info("Re Init Session Data")
             self.init_session_data()
             return True

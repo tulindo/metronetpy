@@ -7,8 +7,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class MetronetBridge(object):
-    def __init__(self, config):
-        self.controller = Controller(config)
+    def __init__(self, username, password):
+        self.controller = Controller(username, password)
         self._thread = None
 
     def register_callback(self, func):
@@ -21,6 +21,9 @@ class MetronetBridge(object):
         """
         self.controller.callbacks.append(func)
 
+    def load_config(self, sensors):
+        self.controller.set_sensors(sensors)
+
     def connect(self):
 
         # Imposta logging chiave ssl
@@ -31,8 +34,8 @@ class MetronetBridge(object):
         self.controller.init_session_cookie()
         _LOGGER.debug(f"Cookie: {self.controller.session_cookie!s}")
 
-        self.controller.login()
-        _LOGGER.debug("Loggedin")
+        _LOGGER.debug("Logging in")
+        return self.controller.login()
 
     def get_sensors(self):
         self.controller.init_session_data()
@@ -47,6 +50,7 @@ class MetronetBridge(object):
         return self.controller.sensors
 
     def main_loop(self):
+        self.controller.run = True
         self._thread = threading.Thread(
             target=self.controller.message_loop, daemon=True
         )

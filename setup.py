@@ -1,4 +1,7 @@
 import setuptools
+import os
+
+print(os.environ)
 
 with open("README.md", "r") as fh:
     long_description = fh.read()

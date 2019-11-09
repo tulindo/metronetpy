@@ -1,0 +1,142 @@
+#!/usr/bin/env python
+
+import argparse
+import logging
+import time
+import yaml
+from pathlib import Path
+
+from metronetpy.bridge import MetronetBridge
+from metronetpy.__version__ import __version__
+
+_LOGGER = logging.getLogger()
+
+
+def set_logging(debug):
+    level = logging.INFO
+    if debug:
+        level = logging.INFO
+
+    console = logging.StreamHandler()
+    console.setLevel(level)
+    formatter = logging.Formatter(
+        "%(asctime)s %(name)-12s: %(levelname)-8s %(message)s", "%Y-%m-%d %H:%M:%S"
+    )
+    console.setFormatter(formatter)
+
+    log = logging.getLogger("hpack")
+    log.setLevel(logging.WARNING)
+    log = logging.getLogger("hyper")
+    log.setLevel(logging.WARNING)
+    _LOGGER.addHandler(console)
+    _LOGGER.setLevel(logging.DEBUG)
+
+
+def callback(data):
+    _LOGGER.info(f"Received {data}")
+
+
+def do_login(args):
+    _LOGGER.info("LOGIN")
+    bridge = MetronetBridge(args.username, args.password)
+    if bridge.connect():
+        _LOGGER.info("Logged In")
+    else:
+        _LOGGER.error("Failed to login")
+        exit(1)
+    return bridge
+
+
+def do_config(args, bridge):
+    sensors = bridge.get_sensors()
+    _LOGGER.debug(sensors)
+
+    # Remove the state information
+    for sensor in sensors:
+        del sensor["active"]
+
+    config = {
+        "metronet": {
+            "username": "!secret metronet_username",
+            "password": "!secret metronet_password",
+            "sensors": sensors,
+        }
+    }
+
+    with open(args.config, "w") as file:
+        yaml.dump(config, file, default_flow_style=False, sort_keys=False)
+    _LOGGER.info("Configuration file created")
+
+
+def do_run(args, bridge):
+    with open(args.config, "r") as file:
+        cfg = yaml.load(file)
+    bridge.load_config(cfg["metronet"]["sensors"])
+
+    sensors = bridge.get_sensors()
+    _LOGGER.info(sensors)
+
+    _LOGGER.info("Regiter callbck function")
+    bridge.register_callback(callback)
+
+    _LOGGER.info("Begin main loop")
+    bridge.main_loop()
+
+    while True:
+        time.sleep(1)
+
+    bridge.stop()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command")
+    parser.add_argument(
+        "--config",
+        default="configuration.yaml",
+        metavar="FILE",
+        help="Path to config file",
+    )
+    parser.add_argument("--debug", default=False, help="Enable debug")
+    parser.add_argument("--username", help="Metronet Username")
+    parser.add_argument("--password", help="Metronet Password")
+    args = parser.parse_args()
+
+    set_logging(args.debug)
+
+    _LOGGER.info("Starting")
+
+    if args.username == None or args.password == None:
+        _LOGGER.error("Missing username")
+        exit(1)
+    if args.password == None:
+        _LOGGER.error("Missing password")
+        exit(2)
+
+    _login = False
+    _config = False
+    _run = False
+    if args.command == "login":
+        _login = True
+    elif args.command == "config":
+        _login = True
+        _config = True
+    elif args.command == "run":
+        _login = True
+        _run = True
+    elif args.command == "version":
+        _LOGGER.info(f"Metronetpy version {__version__}")
+    else:
+        _LOGGER.error("Command args missing or not suppored")
+        exit(2)
+
+    if _login:
+        bridge = do_login(args)
+    if _config:
+        do_config(args, bridge)
+    if _run:
+        do_run(args, bridge)
+
+
+if __name__ == "__main__":
+    main()
