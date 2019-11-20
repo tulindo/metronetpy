@@ -3,11 +3,12 @@
 import argparse
 import logging
 import time
-import yaml
 from pathlib import Path
 
-from metronetpy.bridge import MetronetBridge
+import yaml
+
 from metronetpy.__version__ import __version__
+from metronetpy.bridge import MetronetBridge
 
 _LOGGER = logging.getLogger()
 
@@ -15,7 +16,7 @@ _LOGGER = logging.getLogger()
 def set_logging(debug):
     level = logging.INFO
     if debug:
-        level = logging.INFO
+        level = logging.DEBUG
 
     console = logging.StreamHandler()
     console.setLevel(level)
@@ -32,8 +33,8 @@ def set_logging(debug):
     _LOGGER.setLevel(logging.DEBUG)
 
 
-def callback(data):
-    _LOGGER.info(f"Received {data}")
+def callback(id, active):
+    _LOGGER.info(f"Sensor {id} active: {active}")
 
 
 def do_login(args):
@@ -70,14 +71,15 @@ def do_config(args, bridge):
 
 def do_run(args, bridge):
     with open(args.config, "r") as file:
-        cfg = yaml.load(file)
+        cfg = yaml.load(file, Loader=yaml.FullLoader)
     bridge.load_config(cfg["metronet"]["sensors"])
 
     sensors = bridge.get_sensors()
     _LOGGER.info(sensors)
 
-    _LOGGER.info("Regiter callbck function")
-    bridge.register_callback(callback)
+    _LOGGER.info("Regiter callback functions")
+    for sensor in sensors:
+        bridge.register_callback(sensor["id"], callback)
 
     _LOGGER.info("Begin main loop")
     bridge.main_loop()
@@ -104,15 +106,6 @@ def main():
 
     set_logging(args.debug)
 
-    _LOGGER.info("Starting")
-
-    if args.username == None or args.password == None:
-        _LOGGER.error("Missing username")
-        exit(1)
-    if args.password == None:
-        _LOGGER.error("Missing password")
-        exit(2)
-
     _login = False
     _config = False
     _run = False
@@ -126,8 +119,18 @@ def main():
         _run = True
     elif args.command == "version":
         _LOGGER.info(f"Metronetpy version {__version__}")
+        exit(0)
     else:
         _LOGGER.error("Command args missing or not suppored")
+        exit(2)
+
+    _LOGGER.info("Starting")
+
+    if args.username == None or args.password == None:
+        _LOGGER.error("Missing username")
+        exit(1)
+    if args.password == None:
+        _LOGGER.error("Missing password")
         exit(2)
 
     if _login:

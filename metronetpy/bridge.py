@@ -11,7 +11,7 @@ class MetronetBridge(object):
         self.controller = Controller(username, password)
         self._thread = None
 
-    def register_callback(self, func):
+    def register_callback(self, sensor_id, func):
         """Store callback in list.
 
         The callback should accept a dict as argument. 
@@ -19,7 +19,9 @@ class MetronetBridge(object):
         the alarm control panel, all callbacks will be called with a dict
         containing the new status of the alarm.
         """
-        self.controller.callbacks.append(func)
+        if sensor_id not in self.controller.callbacks:
+            self.controller.callbacks[sensor_id] = []
+        self.controller.callbacks[sensor_id].append(func)
 
     def load_config(self, sensors):
         self.controller.set_sensors(sensors)
@@ -28,6 +30,7 @@ class MetronetBridge(object):
 
         # Imposta logging chiave ssl
         # sslkeylog.set_keylog("/home/tuni/sslkey.log")
+        _LOGGER.debug("Connect")
 
         self.controller.init_connection()
 
@@ -45,17 +48,26 @@ class MetronetBridge(object):
 
         self.controller.get_strings()
 
-        self.controller.get_inputs(notify=False)
+        self.controller.get_inputs()
 
         return self.controller.sensors
 
     def main_loop(self):
+        """
+        Main working loop. 
+        
+        Runs in a separate thread
+        """
         self.controller.run = True
         self._thread = threading.Thread(
-            target=self.controller.message_loop, daemon=True
+            target=self.controller.message_loop, name="Metronet", daemon=True
         )
         self._thread.start()
 
     def stop(self):
-        self.controller.stop_loop()
-        self._thread.join()
+        """
+        Stop main loop.
+        """
+        if self.controller.run:
+            self.controller.stop_loop()
+            self._thread.join()

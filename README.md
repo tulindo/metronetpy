@@ -6,7 +6,7 @@ Python Package for programmatically controlling Security and Intrusion systems m
 working at any time without warning.
 
 # Credits
-Originally inspired by [(concord232)](https://github.com/JasonCarter80/concord232) and [(pythonegardia)](https://github.com/jeroenterheerdt/python-egardia)
+Originally inspired by [concord232](https://github.com/JasonCarter80/concord232) and [pythonegardia](https://github.com/jeroenterheerdt/python-egardia)
 Additional scaffolding from [alexapy](https://gitlab.com/keatontaylor/alexapy)
 
 # License
