@@ -234,7 +234,7 @@ class Controller(object):
         _LOGGER.info("Mainloop: Started")
         while self.run:
             # Loop forever
-            _LOGGER.info("Mainloop: Getting Updates")
+            _LOGGER.debug("Mainloop: Getting Updates")
             update = self.get_updates()
             _LOGGER.debug("Mainloop: End Getting Updates")
             # Ask for update
