@@ -1,17 +1,19 @@
-import json
 import logging
 import re
+import requests
 import time
-from datetime import datetime
-from urllib.parse import urlencode
 
-import sslkeylog
-from hyper import HTTP20Connection
+
+# import sslkeylog
 
 _LOGGER = logging.getLogger(__name__)
 
 METRONET = "metronet.iessonline.com"
 METRONET_URL = f"https://{METRONET}/"
+METRONET_STATUS = f"https://{METRONET}/Status"
+METRONET_API_STRINGS = f"https://{METRONET}/api/strings"
+METRONET_API_INPUTS = f"https://{METRONET}/api/inputs"
+METRONET_API_UPDATES = f"https://{METRONET}/api/updates"
 
 
 class Controller(object):
@@ -22,9 +24,7 @@ class Controller(object):
         self.lookup = {}
         self.callbacks = {}
         self.run = False
-        self.connection = None
-        self.session_cookie = None
-        self.headers = None
+        self.session = None
         self.session_id = None
         self.last_input = None
 
@@ -48,46 +48,36 @@ class Controller(object):
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Could not notify callback")
 
-    def init_connection(self):
-        self.connection = HTTP20Connection(METRONET)
+    def init_session(self):
+        self.session = requests.Session()
 
-    def init_session_cookie(self):
-        # GET ASP Session Cookie
-        headers = {
-            "upgrade-insecure-requests": "1",
-            "sec-fetch-mode": "navigate",
-            "sec-fetch-user": "?1",
-            "sec-fetch-site": "none",
-            "accept-encoding": "gzip",
-        }
+        resp = self.session.get(METRONET_URL)
+        _LOGGER.debug(f"Init Session Cookie -> response code: {resp.status_code}")
 
-        self.connection.request("GET", "/", headers=headers)
-        resp = self.connection.get_response()
-        _LOGGER.debug(f"Init Session Cookie -> response code: {resp.status}")
+        self.session.headers.update(
+            {
+                "x-requested-with": "XMLHttpReques",
+                "sec-fetch-mode": "cors",
+                "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "origin": METRONET_URL,
+                "sec-fetch-site": "same-origin",
+                "referer": f"{METRONET_URL}Status",
+            }
+        )
 
-        for i in resp.headers.get("set-cookie"):
-            str = i.decode("UTF-8")
-            if str.startswith("ASP.NET_SessionId="):
-                self.session_cookie = str.split(";")[0]
-                _LOGGER.debug(f"Init Session Cookie -> cookie: {self.session_cookie}")
-                self.headers = self.get_headers()
-                _LOGGER.debug(f"Init Session Cookie -> Headers: {self.headers}")
+        _LOGGER.debug(f"Init Session Cookie -> Headers: {self.session.headers}")
 
     def login(self):
         # Login to metronet
-        headers = {
-            "cache-control": "max-age=0",
-            "origin": METRONET_URL,
-            "upgrade-insecure-requests": "1",
-            "content-type": "application/x-www-form-urlencoded",
-            "sec-fetch-mode": "navigate",
-            "sec-fetch-user": "?1",
-            "sec-fetch-site": "same-origin",
-            "referer": METRONET_URL,
-            "accept-encoding": "gzip",
-            "cookie": self.session_cookie,
-        }
-
+        self.session.headers.update(
+            {
+                "sec-fetch-mode": "navigate",
+                "sec-fetch-user": "?1",
+                "sec-fetch-site": "same-origin",
+                "referer": METRONET_URL,
+            }
+        )
+        _LOGGER.debug(f"Init Login -> Headers: {self.session.headers}")
         data = {
             "IsDisableAccountCreation": "False",
             "IsAllowThemeChange": "False",
@@ -96,68 +86,40 @@ class Controller(object):
             "RememberMe": "false",
         }
 
-        self.connection.request("POST", "/", body=urlencode(data), headers=headers)
+        resp = self.session.post(METRONET_URL, data=data)
+        _LOGGER.debug(f"Init Login -> Cookies: {self.session.cookies}")
 
-        resp = self.connection.get_response()
-        _LOGGER.debug(f"Login -> response code: {resp.status}")
+        _LOGGER.debug(f"Login -> response code: {resp.status_code}")
 
-        logged_in = False
-        if resp.status == 302:
-            found_username = False
-            found_password = False
-            for i in resp.headers.get("set-cookie"):
-                str = i.decode("UTF-8")
-                if not found_username:
-                    found_username = "username" in str
-                if not found_password:
-                    found_password = "password" in str
-            if found_username and found_password:
-                logged_in = True
-
+        logged_in = resp.url == METRONET_STATUS
         _LOGGER.debug(f"Login -> logged in: {logged_in}")
+        if logged_in:
+            self.parse_status_page(resp.text)
         return logged_in
 
     def get_variable(self, page, name):
         # Legge variabile da pagina html.
         regex = f"var\s+{name!s}\s+=\s+'[0-9a-f-]+';"
         match = re.search(regex, page)
-        if match != None:
+        if match is not None:
             line = match.group()
             index = line.find("'")
             return line[index + 1 : -2]
 
-    def init_session_data(self):
-        headers = {
-            "cache-control": "max-age=0",
-            "upgrade-insecure-requests": "1",
-            "sec-fetch-mode": "navigate",
-            "sec-fetch-user": "?1",
-            "sec-fetch-site": "same-origin",
-            "referer": METRONET_URL,
-            "accept-encoding": "gzip",
-            "cookie": self.session_cookie,
-        }
-        self.connection.request("GET", "/Status", headers=headers)
-        resp = self.connection.get_response()
-        _LOGGER.debug(f"Init Session Data -> response code: {resp.status}")
-        page = resp.read().decode("UTF-8")
-
+    def parse_status_page(self, page):
         self.session_id = self.get_variable(page, "sessionId")
-        _LOGGER.debug(f"Init Session Data -> sessionId {self.session_id}")
+        _LOGGER.debug(f"Parse Status Page -> sessionId {self.session_id}")
         self.last_input = self.get_variable(page, "lastInputId")
-        _LOGGER.debug(f"Init Session Data -> LastInput {self.last_input}")
+        _LOGGER.debug(f"Parse Status Page -> LastInput {self.last_input}")
 
     def get_strings(self):
         data = {"sessionId": self.session_id}
 
-        self.connection.request(
-            "POST", "/api/strings", body=urlencode(data), headers=self.headers
-        )
+        resp = self.session.post(METRONET_API_STRINGS, data=data)
 
-        resp = self.connection.get_response()
-        _LOGGER.debug(f"Strings-> response code: {resp.status}")
-        page = resp.read().decode("UTF-8")
-        page = json.loads(page)
+        _LOGGER.debug(f"Strings-> response code: {resp.status_code}")
+
+        page = resp.json()
 
         for str in page:
             if str["Class"] == 10:
@@ -182,15 +144,14 @@ class Controller(object):
         data = {"sessionId": self.session_id}
         _LOGGER.debug(f"Get Inputs -> data {data}")
 
-        self.connection.request(
-            "POST", "/api/inputs", body=urlencode(data), headers=self.headers
-        )
-
-        resp = self.connection.get_response()
-        _LOGGER.debug(f"Get Inputs -> response code: {resp.status}")
-        if resp.status == 200:
-            page = resp.read().decode("UTF-8")
-            page = json.loads(page)
+        try:
+            resp = self.session.post(METRONET_API_INPUTS, data=data, timeout=10)
+        except:
+            _LOGGER.error("Get Inputs -> Exception!")
+        if resp is not None:
+            _LOGGER.debug(f"Get Inputs -> response code: {resp.status_code}")
+        if resp is not None and resp.status_code == 200:
+            page = resp.json()
 
             is_changed = False
             notify_data = []
@@ -217,15 +178,11 @@ class Controller(object):
             time.sleep(15)
             _LOGGER.info("Get Inputs -> Relogin")
             self.login()
-            _LOGGER.info("Get Inputs -> Re Init Session Data")
-            self.init_session_data()
             # Try again.
             self.get_inputs(is_retry=True)
         else:
             _LOGGER.info("Get Inputs -> Relogin")
             self.login()
-            _LOGGER.info("Get Inputs -> Re Init Session Data")
-            self.init_session_data()
             # Try again.
             self.get_inputs(is_retry=True)
 
@@ -242,18 +199,16 @@ class Controller(object):
         }
         _LOGGER.debug(f"Updates -> data {data}")
 
-        self.connection.request(
-            "POST", "/api/updates", body=urlencode(data), headers=self.headers
-        )
+        try:
+            resp = self.session.post(METRONET_API_UPDATES, data=data, timeout=30)
+        except:
+            _LOGGER.error("Updates -> Exception!")
+            return False
+        _LOGGER.debug(f"Updates -> response code: {resp.status_code}")
+        if resp.status_code == 200:
+            page = resp.json()
 
-        resp = self.connection.get_response()
-        _LOGGER.debug(f"Updates -> response code: {resp.status}")
-        if resp.status == 200:
-            page = resp.read().decode("UTF-8")
-
-            pagej = json.loads(page)
-
-            changes = pagej["HasChanges"]
+            changes = page["HasChanges"]
             # if changes:
             _LOGGER.debug(
                 f"Updates -> Last Input: {self.last_input} -> Changes: {changes}"
@@ -266,21 +221,7 @@ class Controller(object):
             if not logged_in:
                 _LOGGER.error("Updates -> Failed to login")
                 return False
-            _LOGGER.info("Updates -> Re Init Session Data")
-            self.init_session_data()
             return True
-
-    def get_headers(self):
-        return {
-            "x-requested-with": "XMLHttpReques",
-            "sec-fetch-mode": "cors",
-            "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "origin": METRONET_URL,
-            "sec-fetch-site": "same-origin",
-            "referer": f"{METRONET_URL}Status",
-            "accept-encoding": "gzip",
-            "cookie": self.session_cookie,
-        }
 
     def message_loop(self):
         """
@@ -293,13 +234,15 @@ class Controller(object):
         _LOGGER.info("Mainloop: Started")
         while self.run:
             # Loop forever
-            _LOGGER.debug("Mainloop: Getting Updates")
+            _LOGGER.info("Mainloop: Getting Updates")
             update = self.get_updates()
+            _LOGGER.debug("Mainloop: End Getting Updates")
             # Ask for update
             if update:
                 # Get inputs
                 _LOGGER.debug("Mainloop: Getting Inputs")
                 self.get_inputs()
+                _LOGGER.debug("Mainloop: End Getting Inputs")
         _LOGGER.info("Mainloop: ended")
 
     def stop_loop(self):

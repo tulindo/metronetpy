@@ -14,7 +14,7 @@ class MetronetBridge(object):
     def register_callback(self, sensor_id, func):
         """Store callback in list.
 
-        The callback should accept a dict as argument. 
+        The callback should accept a dict as argument.
         For each update in sensor states request from
         the alarm control panel, all callbacks will be called with a dict
         containing the new status of the alarm.
@@ -32,20 +32,12 @@ class MetronetBridge(object):
         # sslkeylog.set_keylog("/home/tuni/sslkey.log")
         _LOGGER.debug("Connect")
 
-        self.controller.init_connection()
-
-        self.controller.init_session_cookie()
-        _LOGGER.debug(f"Cookie: {self.controller.session_cookie!s}")
+        self.controller.init_session()
 
         _LOGGER.debug("Logging in")
         return self.controller.login()
 
     def get_sensors(self):
-        self.controller.init_session_data()
-
-        _LOGGER.debug(f"SessionID: {self.controller.session_id}")
-        _LOGGER.debug(f"Last Input: {self.controller.last_input}")
-
         self.controller.get_strings()
 
         self.controller.get_inputs()
@@ -54,8 +46,8 @@ class MetronetBridge(object):
 
     def main_loop(self):
         """
-        Main working loop. 
-        
+        Main working loop.
+
         Runs in a separate thread
         """
         self.controller.run = True

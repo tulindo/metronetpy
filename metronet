@@ -3,7 +3,6 @@
 import argparse
 import logging
 import time
-from pathlib import Path
 
 import yaml
 
@@ -14,7 +13,7 @@ _LOGGER = logging.getLogger()
 
 
 def set_logging(debug):
-    level = logging.INFO
+    level = logging.DEBUG
     if debug:
         level = logging.DEBUG
 
@@ -25,10 +24,6 @@ def set_logging(debug):
     )
     console.setFormatter(formatter)
 
-    log = logging.getLogger("hpack")
-    log.setLevel(logging.WARNING)
-    log = logging.getLogger("hyper")
-    log.setLevel(logging.WARNING)
     _LOGGER.addHandler(console)
     _LOGGER.setLevel(logging.DEBUG)
 
@@ -126,10 +121,10 @@ def main():
 
     _LOGGER.info("Starting")
 
-    if args.username == None or args.password == None:
+    if args.username is None or args.password is None:
         _LOGGER.error("Missing username")
         exit(1)
-    if args.password == None:
+    if args.password is None:
         _LOGGER.error("Missing password")
         exit(2)
 
