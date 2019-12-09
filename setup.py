@@ -25,6 +25,6 @@ setuptools.setup(
         "Development Status :: 3 - Alpha",
     ],
     python_requires=">=3.7",
-    install_requires=["requests", "sslkeylog"],
+    install_requires=["requests", "pyyaml", "sslkeylog"],
     scripts=["metronet"],
 )
