@@ -1,9 +1,10 @@
 #!/usr/bin/env python
+"""The Metronet IESS Online bridge."""
 
 import argparse
 import logging
+import sys
 import time
-
 import yaml
 
 from metronetpy.__version__ import __version__
@@ -13,7 +14,8 @@ _LOGGER = logging.getLogger()
 
 
 def set_logging(debug):
-    level = logging.DEBUG
+    """Set logging."""
+    level = logging.INFO
     if debug:
         level = logging.DEBUG
 
@@ -28,22 +30,25 @@ def set_logging(debug):
     _LOGGER.setLevel(logging.DEBUG)
 
 
-def callback(id, active):
-    _LOGGER.info(f"Sensor {id} active: {active}")
+def callback(idx, active):
+    """Notify about sensor state change."""
+    _LOGGER.info("Sensor %d active: %s", idx, active)
 
 
 def do_login(args):
+    """Login to Metronet."""
     _LOGGER.info("LOGIN")
     bridge = MetronetBridge(args.username, args.password)
     if bridge.connect():
         _LOGGER.info("Logged In")
     else:
         _LOGGER.error("Failed to login")
-        exit(1)
+        sys.exit(1)
     return bridge
 
 
 def do_config(args, bridge):
+    """Handle configuration."""
     sensors = bridge.get_sensors()
     _LOGGER.debug(sensors)
 
@@ -65,6 +70,7 @@ def do_config(args, bridge):
 
 
 def do_run(args, bridge):
+    """Run main loop."""
     with open(args.config, "r") as file:
         cfg = yaml.load(file, Loader=yaml.FullLoader)
     bridge.load_config(cfg["metronet"]["sensors"])
@@ -72,7 +78,7 @@ def do_run(args, bridge):
     sensors = bridge.get_sensors()
     _LOGGER.info(sensors)
 
-    _LOGGER.info("Regiter callback functions")
+    _LOGGER.info("Register callback functions")
     for sensor in sensors:
         bridge.register_callback(sensor["id"], callback)
 
@@ -86,6 +92,7 @@ def do_run(args, bridge):
 
 
 def main():
+    """Metronet main program."""
     parser = argparse.ArgumentParser()
     parser.add_argument("command")
     parser.add_argument(
@@ -113,20 +120,20 @@ def main():
         _login = True
         _run = True
     elif args.command == "version":
-        _LOGGER.info(f"Metronetpy version {__version__}")
-        exit(0)
+        _LOGGER.info("Metronetpy version %s", __version__)
+        sys.exit(0)
     else:
         _LOGGER.error("Command args missing or not suppored")
-        exit(2)
+        sys.exit(2)
 
     _LOGGER.info("Starting")
 
     if args.username is None or args.password is None:
         _LOGGER.error("Missing username")
-        exit(1)
+        sys.exit(1)
     if args.password is None:
         _LOGGER.error("Missing password")
-        exit(2)
+        sys.exit(2)
 
     if _login:
         bridge = do_login(args)

@@ -17,22 +17,18 @@ init:
 	pipenv install --three --dev
 lint: flake8 docstyle pylint typing
 flake8:
-
-	pipenv run flake8 metronetpy
+	pipenv run flake8 metronetpy metronet
 docstyle:
-	pipenv run pydocstyle metronetpy
+	pipenv run pydocstyle metronetpy metronet
 pylint:
-	pipenv run pylint metronetpy
+	pipenv run pylint metronetpy metronet
+typing:
+	pipenv run mypy --ignore-missing-imports metronetpy metronet
 publish:
 	pipenv run python setup.py sdist bdist_wheel
 	pipenv run twine upload dist/*
 	rm -rf dist/ build/ .egg metronetpy.egg-info/
-setup_env:
-	pip3 install pip pipenv
-	pipenv sync --three --dev
 test:
 	#Not implemented yet
 	#pipenv run py.test
-typing:
-	pipenv run mypy --ignore-missing-imports metronetpy
 
