@@ -5,10 +5,10 @@ import argparse
 import logging
 import sys
 import time
-import yaml
 
 from metronetpy.__version__ import __version__
 from metronetpy.bridge import MetronetBridge
+import yaml
 
 _LOGGER = logging.getLogger()
 

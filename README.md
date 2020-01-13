@@ -6,15 +6,16 @@ Python Package for programmatically controlling Security and Intrusion systems m
 working at any time without warning.
 
 # Credits
-Originally inspired by [concord232](https://github.com/JasonCarter80/concord232) and [pythonegardia](https://github.com/jeroenterheerdt/python-egardia)
-Additional scaffolding from [alexapy](https://gitlab.com/keatontaylor/alexapy)
+Originally inspired by [concord232](https://github.com/JasonCarter80/concord232) and [pythonegardia](https://github.com/jeroenterheerdt/python-egardia).
+
+Additional scaffolding from [alexapy](https://gitlab.com/keatontaylor/alexapy) and [simplisafe-python](https://github.com/bachya/simplisafe-python)
 
 # Contributing
 1.  [Check for open features/bugs](https://github.com/tulindo/metronetpy/issues)
   or [initiate a discussion on one](https://github.com/tulindo/metronetpy/issues/new).
 2.  Fork the repository.
-3.  Install the dev environment: `make init`.
-4.  Enter the virtual environment: `pipenv shell`
+3.  Install the dev environment: `python3 -m venv venv`.
+4.  Enter the virtual environment: `source venv/bin/activate`
 5.  Install requirements: `pip3 install -r requirements.txt`
 6.  Code your new feature or bug fix.
 7.  Write a test that covers your new functionality.
